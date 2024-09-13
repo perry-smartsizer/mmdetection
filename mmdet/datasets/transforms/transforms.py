@@ -498,7 +498,7 @@ class RandomRotate90(BaseTransform):
     Required Keys:
 
     - img
-    - gt_bboxes (BaseBoxes[torch.float32])
+    - gt_bboxes (BaseBoxes)
     - gt_bboxes_labels (np.int64)
     - gt_ignore_flags (bool) (optional)
 
@@ -513,26 +513,26 @@ class RandomRotate90(BaseTransform):
         prob (float): Probability of applying rotation. Defaults to 0.5.
     """
 
-    def __init__(self, prob: float = 0.5) -> None:
+    def __init__(self, prob=0.5) -> None:
         assert 0 <= prob <= 1
         self.prob = prob
         self.rotation_angles = [90, 180, 270]  # Predefined rotation angles
 
     @cache_randomness
-    def _random_prob(self) -> float:
+    def _random_prob(self):
         """Generate a random probability."""
         return random.uniform(0, 1)
 
     @cache_randomness
-    def _random_angle(self) -> int:
+    def _random_angle(self):
         """Randomly select one of the predefined rotation angles."""
         return random.choice(self.rotation_angles)
 
-    def _rotate_img(self, img: np.ndarray, angle: int) -> np.ndarray:
+    def _rotate_img(self, img, angle):
         """Rotate the image by the given angle."""
         return mmcv.imrotate(img, angle)
 
-    def _rotate_bboxes(self, bboxes: torch.Tensor, angle: int, img_shape: tuple) -> torch.Tensor:
+    def _rotate_bboxes(self, bboxes, angle, img_shape):
         """Rotate bounding boxes by the given angle."""
         h, w = img_shape[:2]
         if angle == 90:
@@ -547,7 +547,7 @@ class RandomRotate90(BaseTransform):
         return bboxes
 
     @autocast_box_type()
-    def transform(self, results: dict) -> dict:
+    def transform(self, results):
         """Apply the random rotation transformation to the image and bounding boxes.
 
         Args:
@@ -568,7 +568,7 @@ class RandomRotate90(BaseTransform):
 
             # Rotate the bounding boxes
             if 'gt_bboxes' in results:
-                bboxes = results['gt_bboxes'].clone()
+                bboxes = results['gt_bboxes'].copy()
                 bboxes = self._rotate_bboxes(bboxes, angle, img_shape)
                 results['gt_bboxes'] = bboxes
 
@@ -577,7 +577,7 @@ class RandomRotate90(BaseTransform):
 
         return results
 
-    def __repr__(self) -> str:
+    def __repr__(self):
         """Print basic information of the transform."""
         repr_str = self.__class__.__name__
         repr_str += f'(prob={self.prob})'
