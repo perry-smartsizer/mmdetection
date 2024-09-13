@@ -531,6 +531,190 @@ class Rotate(GeomTransform):
             border_value=self.seg_ignore_label,
             interpolation='nearest')
 
+@TRANSFORMS.register_module()
+class RandomRotate90(Rotate):
+    """Randomly rotate the image, bboxes, masks, and segmentation map by 90, 180, or 270 degrees.
+
+    This class inherits from the Rotate class.
+
+    Args:
+        prob (float): The probability for performing transformation.
+            Defaults to 1.0.
+        img_border_value (int | float | tuple): The filled values for
+            image border. Defaults to 128.
+        mask_border_value (int): The fill value used for masks. Defaults to 0.
+        seg_ignore_label (int): The fill value used for segmentation map.
+            Defaults to 255.
+        interpolation (str): Interpolation method. Defaults to 'bilinear'.
+    """
+
+    def __init__(self,
+                 prob: float = 0.5,
+                 img_border_value: Union[int, float, tuple] = 128,
+                 mask_border_value: int = 0,
+                 seg_ignore_label: int = 255,
+                 interpolation: str = 'bilinear') -> None:
+        # Call parent class initializer
+        super().__init__(
+            prob=prob,
+            img_border_value=img_border_value,
+            mask_border_value=mask_border_value,
+            seg_ignore_label=seg_ignore_label,
+            interpolation=interpolation)
+
+        # Predefined rotation angles
+        self.rotation_angles = [90, 180, 270]
+
+    @cache_randomness
+    def _get_rotation_angle(self) -> int:
+        """Randomly select one of the predefined rotation angles (90, 180, or 270)."""
+        return np.random.choice(self.rotation_angles)
+
+    def transform(self, results: dict) -> None:
+        """Apply the random rotation transformation."""
+        angle = self._get_rotation_angle()
+
+        # Call the inherited methods for transformation
+        self._transform_img(results, angle)
+
+        # Rotate bounding boxes
+        if 'gt_bboxes' in results:
+            homography_matrix = self._get_homography_matrix(results, angle)
+            results['gt_bboxes'].rotate(homography_matrix, results['img_shape'])
+
+        # Rotate masks
+        if 'gt_masks' in results:
+            self._transform_masks(results, angle)
+
+        # Rotate segmentation map
+        if 'gt_seg_map' in results:
+            self._transform_seg(results, angle)
+
+        # Store the homography matrix in the results
+        results['homography_matrix'] = self._get_homography_matrix(results, angle)
+
+    def __repr__(self) -> str:
+        """Print basic information of the transform."""
+        repr_str = self.__class__.__name__
+        repr_str += f'(prob={self.prob})'
+        return repr_str
+
+
+# @TRANSFORMS.register_module()
+# class RandomRotate90(GeomTransform):
+#     """Randomly rotate the image, bboxes, masks, and segmentation map by 90, 180, or 270 degrees.
+
+#     Required Keys:
+
+#     - img
+#     - gt_bboxes (BaseBoxes[torch.float32]) (optional)
+#     - gt_masks (BitmapMasks | PolygonMasks) (optional)
+#     - gt_seg_map (np.uint8) (optional)
+
+#     Modified Keys:
+
+#     - img
+#     - gt_bboxes
+#     - gt_masks
+#     - gt_seg_map
+
+#     Added Keys:
+
+#     - homography_matrix
+
+#     Args:
+#         prob (float): The probability for performing transformation.
+#             Defaults to 1.0.
+#         img_border_value (int | float | tuple): The filled values for
+#             image border. Defaults to 128.
+#         mask_border_value (int): The fill value used for masks. Defaults to 0.
+#         seg_ignore_label (int): The fill value used for segmentation map.
+#             Defaults to 255.
+#         interpolation (str): Interpolation method. Defaults to 'bilinear'.
+#     """
+
+#     def __init__(self,
+#                  prob: float = 1.0,
+#                  img_border_value: Union[int, float, tuple] = 128,
+#                  mask_border_value: int = 0,
+#                  seg_ignore_label: int = 255,
+#                  interpolation: str = 'bilinear') -> None:
+#         super().__init__(
+#             prob=prob,
+#             img_border_value=img_border_value,
+#             mask_border_value=mask_border_value,
+#             seg_ignore_label=seg_ignore_label,
+#             interpolation=interpolation)
+#         self.rotation_angles = [90, 180, 270]  # Predefined angles
+
+#     @cache_randomness
+#     def _get_rotation_angle(self) -> int:
+#         """Randomly select one of the predefined rotation angles (90, 180, or 270)."""
+#         return np.random.choice(self.rotation_angles)
+
+#     def _get_homography_matrix(self, results: dict, angle: float) -> np.ndarray:
+#         """Get the homography matrix for the chosen angle."""
+#         img_shape = results['img_shape']
+#         center = ((img_shape[1] - 1) * 0.5, (img_shape[0] - 1) * 0.5)
+#         cv2_rotation_matrix = cv2.getRotationMatrix2D(center, -angle, 1.0)
+#         return np.concatenate(
+#             [cv2_rotation_matrix,
+#              np.array([0, 0, 1]).reshape((1, 3))]).astype(np.float32)
+
+#     def _transform_img(self, results: dict, angle: float) -> None:
+#         """Rotate the image by the chosen angle."""
+#         results['img'] = mmcv.imrotate(
+#             results['img'],
+#             angle,
+#             border_value=self.img_border_value,
+#             interpolation=self.interpolation)
+
+#     def _transform_masks(self, results: dict, angle: float) -> None:
+#         """Rotate the masks."""
+#         results['gt_masks'] = results['gt_masks'].rotate(
+#             results['img_shape'],
+#             angle,
+#             border_value=self.mask_border_value,
+#             interpolation=self.interpolation)
+
+#     def _transform_seg(self, results: dict, angle: float) -> None:
+#         """Rotate the segmentation map."""
+#         results['gt_seg_map'] = mmcv.imrotate(
+#             results['gt_seg_map'],
+#             angle,
+#             border_value=self.seg_ignore_label,
+#             interpolation='nearest')
+
+#     def transform(self, results: dict) -> None:
+#         """Apply the random rotation transformation."""
+#         angle = self._get_rotation_angle()
+
+#         # Rotate image
+#         self._transform_img(results, angle)
+
+#         # Rotate bounding boxes
+#         if 'gt_bboxes' in results:
+#             # Update bounding boxes using the homography matrix
+#             homography_matrix = self._get_homography_matrix(results, angle)
+#             results['gt_bboxes'].rotate(homography_matrix, results['img_shape'])
+
+#         # Rotate masks
+#         if 'gt_masks' in results:
+#             self._transform_masks(results, angle)
+
+#         # Rotate segmentation map
+#         if 'gt_seg_map' in results:
+#             self._transform_seg(results, angle)
+
+#         # Store the homography matrix in the results
+#         results['homography_matrix'] = self._get_homography_matrix(results, angle)
+
+#     def __repr__(self) -> str:
+#         """Print basic information of the transform."""
+#         repr_str = self.__class__.__name__
+#         repr_str += f'(prob={self.prob})'
+#         return repr_str
+
 
 @TRANSFORMS.register_module()
 class TranslateX(GeomTransform):
