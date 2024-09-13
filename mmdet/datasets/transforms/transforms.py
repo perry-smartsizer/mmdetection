@@ -493,62 +493,38 @@ class FixShapeResize(Resize):
 
 @TRANSFORMS.register_module()
 class RandomRotate90(BaseTransform):
-    """Randomly rotate the image and box by 90, 180, or 270 degrees.
-
-    Required Keys:
-
-    - img
-    - gt_bboxes (BaseBoxes)
-    - gt_bboxes_labels (np.int64)
-    - gt_ignore_flags (bool) (optional)
-
-    Modified Keys:
-
-    - img
-    - gt_bboxes
-    - gt_bboxes_labels
-    - gt_ignore_flags (bool) (optional)
+    """Randomly rotate the image and bounding boxes by 90, 180, or 270 degrees.
 
     Args:
-        prob (float): Probability of applying rotation. Defaults to 0.5.
+        prob (float): Probability of applying the rotation. Defaults to 0.5.
+        bbox_clip_border (bool): Whether to clip bboxes that are outside
+            the image borders after the rotation. Defaults to True.
     """
 
-    def __init__(self, prob=0.5) -> None:
-        assert 0 <= prob <= 1
+    def __init__(self, prob: float = 0.5, bbox_clip_border: bool = True) -> None:
+        super().__init__()
         self.prob = prob
-        self.rotation_angles = [90, 180, 270]  # Predefined rotation angles
+        self.rotation_angles = np.array([90, 180, 270])  # Predefined rotation angles
+        self.bbox_clip_border = bbox_clip_border
 
     @cache_randomness
-    def _random_prob(self):
-        """Generate a random probability."""
-        return random.uniform(0, 1)
+    def _get_random_angle(self) -> int:
+        """Randomly select a rotation angle from 90, 180, or 270 degrees."""
+        return np.random.choice(self.rotation_angles)
 
-    @cache_randomness
-    def _random_angle(self):
-        """Randomly select one of the predefined rotation angles."""
-        return random.choice(self.rotation_angles)
-
-    def _rotate_img(self, img, angle):
-        """Rotate the image by the given angle."""
-        return mmcv.imrotate(img, angle)
-
-    def _rotate_bboxes(self, bboxes, angle, img_shape):
-        """Rotate bounding boxes by the given angle."""
+    def _get_homography_matrix(self, angle: int, img_shape: tuple) -> np.ndarray:
+        """Generate the homography matrix for rotating the image by a specified angle."""
         h, w = img_shape[:2]
         if angle == 90:
-            bboxes[:, [0, 2]] = h - bboxes[:, [1, 3]]
-            bboxes[:, [1, 3]] = bboxes[:, [0, 2]]
+            return np.array([[0, 1, 0], [-1, 0, h], [0, 0, 1]], dtype=np.float32)
         elif angle == 180:
-            bboxes[:, [0, 2]] = w - bboxes[:, [0, 2]]
-            bboxes[:, [1, 3]] = h - bboxes[:, [1, 3]]
+            return np.array([[-1, 0, w], [0, -1, h], [0, 0, 1]], dtype=np.float32)
         elif angle == 270:
-            bboxes[:, [0, 2]] = bboxes[:, [1, 3]]
-            bboxes[:, [1, 3]] = w - bboxes[:, [0, 2]]
-        return bboxes
+            return np.array([[0, -1, w], [1, 0, 0], [0, 0, 1]], dtype=np.float32)
 
     @autocast_box_type()
-    def transform(self, results):
-        """Apply the random rotation transformation to the image and bounding boxes.
+    def transform(self, results: dict) -> dict:
+        """Apply random rotation to the image and bounding boxes.
 
         Args:
             results (dict): Result dict from loading pipeline.
@@ -556,33 +532,43 @@ class RandomRotate90(BaseTransform):
         Returns:
             dict: Transformed results.
         """
-        if self._random_prob() < self.prob:
+        if np.random.rand() < self.prob:
             img = results['img']
             img_shape = img.shape[:2]
 
-            # Choose a random rotation angle
-            angle = self._random_angle()
+            # Randomly select a rotation angle
+            angle = self._get_random_angle()
+
+            # Get the homography matrix for the selected rotation angle
+            homography_matrix = self._get_homography_matrix(angle, img_shape)
 
             # Rotate the image
-            results['img'] = self._rotate_img(img, angle)
+            img = cv2.warpPerspective(img, homography_matrix, (img_shape[1], img_shape[0]), borderValue=(128, 128, 128))
+            results['img'] = img
+            results['img_shape'] = img.shape[:2]
 
             # Rotate the bounding boxes
-            if 'gt_bboxes' in results:
-                bboxes = results['gt_bboxes'].clone()
-                bboxes = self._rotate_bboxes(bboxes, angle, img_shape)
-                results['gt_bboxes'] = bboxes
-
-            # TODO: Support mask and segmentation map rotation if needed
-            # For now, it only handles images and bounding boxes.
+            bboxes = results.get('gt_bboxes', None)
+            if bboxes is not None:
+                num_bboxes = len(bboxes)
+                if num_bboxes:
+                    bboxes.project_(homography_matrix)
+                    if self.bbox_clip_border:
+                        bboxes.clip_(results['img_shape'])
+                    # Remove bboxes that are completely outside the image
+                    valid_index = bboxes.is_inside(results['img_shape']).numpy()
+                    results['gt_bboxes'] = bboxes[valid_index]
+                    results['gt_bboxes_labels'] = results['gt_bboxes_labels'][valid_index]
+                    if 'gt_ignore_flags' in results:
+                        results['gt_ignore_flags'] = results['gt_ignore_flags'][valid_index]
 
         return results
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """Print basic information of the transform."""
         repr_str = self.__class__.__name__
-        repr_str += f'(prob={self.prob})'
+        repr_str += f'(prob={self.prob}, bbox_clip_border={self.bbox_clip_border})'
         return repr_str
-
 
 @TRANSFORMS.register_module()
 class RandomFlip(MMCV_RandomFlip):
