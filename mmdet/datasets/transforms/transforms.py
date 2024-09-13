@@ -568,7 +568,7 @@ class RandomRotate90(BaseTransform):
 
             # Rotate the bounding boxes
             if 'gt_bboxes' in results:
-                bboxes = results['gt_bboxes'].copy()
+                bboxes = results['gt_bboxes'].clone()
                 bboxes = self._rotate_bboxes(bboxes, angle, img_shape)
                 results['gt_bboxes'] = bboxes
 
