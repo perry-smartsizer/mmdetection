@@ -491,6 +491,98 @@ class FixShapeResize(Resize):
         repr_str += f'interpolation={self.interpolation})'
         return repr_str
 
+@TRANSFORMS.register_module()
+class RandomRotate90(BaseTransform):
+    """Randomly rotate the image and box by 90, 180, or 270 degrees.
+
+    Required Keys:
+
+    - img
+    - gt_bboxes (BaseBoxes[torch.float32])
+    - gt_bboxes_labels (np.int64)
+    - gt_ignore_flags (bool) (optional)
+
+    Modified Keys:
+
+    - img
+    - gt_bboxes
+    - gt_bboxes_labels
+    - gt_ignore_flags (bool) (optional)
+
+    Args:
+        prob (float): Probability of applying rotation. Defaults to 0.5.
+    """
+
+    def __init__(self, prob: float = 0.5) -> None:
+        assert 0 <= prob <= 1
+        self.prob = prob
+        self.rotation_angles = [90, 180, 270]  # Predefined rotation angles
+
+    @cache_randomness
+    def _random_prob(self) -> float:
+        """Generate a random probability."""
+        return random.uniform(0, 1)
+
+    @cache_randomness
+    def _random_angle(self) -> int:
+        """Randomly select one of the predefined rotation angles."""
+        return random.choice(self.rotation_angles)
+
+    def _rotate_img(self, img: np.ndarray, angle: int) -> np.ndarray:
+        """Rotate the image by the given angle."""
+        return mmcv.imrotate(img, angle)
+
+    def _rotate_bboxes(self, bboxes: torch.Tensor, angle: int, img_shape: tuple) -> torch.Tensor:
+        """Rotate bounding boxes by the given angle."""
+        h, w = img_shape[:2]
+        if angle == 90:
+            bboxes[:, [0, 2]] = h - bboxes[:, [1, 3]]
+            bboxes[:, [1, 3]] = bboxes[:, [0, 2]]
+        elif angle == 180:
+            bboxes[:, [0, 2]] = w - bboxes[:, [0, 2]]
+            bboxes[:, [1, 3]] = h - bboxes[:, [1, 3]]
+        elif angle == 270:
+            bboxes[:, [0, 2]] = bboxes[:, [1, 3]]
+            bboxes[:, [1, 3]] = w - bboxes[:, [0, 2]]
+        return bboxes
+
+    @autocast_box_type()
+    def transform(self, results: dict) -> dict:
+        """Apply the random rotation transformation to the image and bounding boxes.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Transformed results.
+        """
+        if self._random_prob() < self.prob:
+            img = results['img']
+            img_shape = img.shape[:2]
+
+            # Choose a random rotation angle
+            angle = self._random_angle()
+
+            # Rotate the image
+            results['img'] = self._rotate_img(img, angle)
+
+            # Rotate the bounding boxes
+            if 'gt_bboxes' in results:
+                bboxes = results['gt_bboxes'].clone()
+                bboxes = self._rotate_bboxes(bboxes, angle, img_shape)
+                results['gt_bboxes'] = bboxes
+
+            # TODO: Support mask and segmentation map rotation if needed
+            # For now, it only handles images and bounding boxes.
+
+        return results
+
+    def __repr__(self) -> str:
+        """Print basic information of the transform."""
+        repr_str = self.__class__.__name__
+        repr_str += f'(prob={self.prob})'
+        return repr_str
+
 
 @TRANSFORMS.register_module()
 class RandomFlip(MMCV_RandomFlip):

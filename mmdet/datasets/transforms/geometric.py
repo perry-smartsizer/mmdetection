@@ -531,73 +531,73 @@ class Rotate(GeomTransform):
             border_value=self.seg_ignore_label,
             interpolation='nearest')
 
-@TRANSFORMS.register_module()
-class RandomRotate90(Rotate):
-    """Randomly rotate the image, bboxes, masks, and segmentation map by 90, 180, or 270 degrees.
+# @TRANSFORMS.register_module()
+# class RandomRotate90(Rotate):
+#     """Randomly rotate the image, bboxes, masks, and segmentation map by 90, 180, or 270 degrees.
 
-    This class inherits from the Rotate class.
+#     This class inherits from the Rotate class.
 
-    Args:
-        prob (float): The probability for performing transformation.
-            Defaults to 1.0.
-        img_border_value (int | float | tuple): The filled values for
-            image border. Defaults to 128.
-        mask_border_value (int): The fill value used for masks. Defaults to 0.
-        seg_ignore_label (int): The fill value used for segmentation map.
-            Defaults to 255.
-        interpolation (str): Interpolation method. Defaults to 'bilinear'.
-    """
+#     Args:
+#         prob (float): The probability for performing transformation.
+#             Defaults to 1.0.
+#         img_border_value (int | float | tuple): The filled values for
+#             image border. Defaults to 128.
+#         mask_border_value (int): The fill value used for masks. Defaults to 0.
+#         seg_ignore_label (int): The fill value used for segmentation map.
+#             Defaults to 255.
+#         interpolation (str): Interpolation method. Defaults to 'bilinear'.
+#     """
 
-    def __init__(self,
-                 prob: float = 0.5,
-                 img_border_value: Union[int, float, tuple] = 128,
-                 mask_border_value: int = 0,
-                 seg_ignore_label: int = 255,
-                 interpolation: str = 'bilinear') -> None:
-        # Call parent class initializer
-        super().__init__(
-            prob=prob,
-            img_border_value=img_border_value,
-            mask_border_value=mask_border_value,
-            seg_ignore_label=seg_ignore_label,
-            interpolation=interpolation)
+#     def __init__(self,
+#                  prob: float = 0.5,
+#                  img_border_value: Union[int, float, tuple] = 128,
+#                  mask_border_value: int = 0,
+#                  seg_ignore_label: int = 255,
+#                  interpolation: str = 'bilinear') -> None:
+#         # Call parent class initializer
+#         super().__init__(
+#             prob=prob,
+#             img_border_value=img_border_value,
+#             mask_border_value=mask_border_value,
+#             seg_ignore_label=seg_ignore_label,
+#             interpolation=interpolation)
 
-        # Predefined rotation angles
-        self.rotation_angles = [90, 180, 270]
+#         # Predefined rotation angles
+#         self.rotation_angles = [90, 180, 270]
 
-    @cache_randomness
-    def _get_rotation_angle(self) -> int:
-        """Randomly select one of the predefined rotation angles (90, 180, or 270)."""
-        return np.random.choice(self.rotation_angles)
+#     @cache_randomness
+#     def _get_rotation_angle(self) -> int:
+#         """Randomly select one of the predefined rotation angles (90, 180, or 270)."""
+#         return np.random.choice(self.rotation_angles)
 
-    def transform(self, results: dict) -> None:
-        """Apply the random rotation transformation."""
-        angle = self._get_rotation_angle()
+#     def transform(self, results: dict) -> None:
+#         """Apply the random rotation transformation."""
+#         angle = self._get_rotation_angle()
 
-        # Call the inherited methods for transformation
-        self._transform_img(results, angle)
+#         # Call the inherited methods for transformation
+#         self._transform_img(results, angle)
 
-        # Rotate bounding boxes
-        if 'gt_bboxes' in results:
-            homography_matrix = self._get_homography_matrix(results, angle)
-            results['gt_bboxes'].rotate(homography_matrix, results['img_shape'])
+#         # Rotate bounding boxes
+#         if 'gt_bboxes' in results:
+#             homography_matrix = self._get_homography_matrix(results, angle)
+#             results['gt_bboxes'].rotate(homography_matrix, results['img_shape'])
 
-        # Rotate masks
-        if 'gt_masks' in results:
-            self._transform_masks(results, angle)
+#         # Rotate masks
+#         if 'gt_masks' in results:
+#             self._transform_masks(results, angle)
 
-        # Rotate segmentation map
-        if 'gt_seg_map' in results:
-            self._transform_seg(results, angle)
+#         # Rotate segmentation map
+#         if 'gt_seg_map' in results:
+#             self._transform_seg(results, angle)
 
-        # Store the homography matrix in the results
-        results['homography_matrix'] = self._get_homography_matrix(results, angle)
+#         # Store the homography matrix in the results
+#         results['homography_matrix'] = self._get_homography_matrix(results, angle)
 
-    def __repr__(self) -> str:
-        """Print basic information of the transform."""
-        repr_str = self.__class__.__name__
-        repr_str += f'(prob={self.prob})'
-        return repr_str
+#     def __repr__(self) -> str:
+#         """Print basic information of the transform."""
+#         repr_str = self.__class__.__name__
+#         repr_str += f'(prob={self.prob})'
+#         return repr_str
 
 
 # @TRANSFORMS.register_module()
